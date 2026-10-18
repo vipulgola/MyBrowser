@@ -111,7 +111,7 @@ class HtmlPageView(context: Context) : View(context) {
             MeasureSpec.getSize(widthMeasureSpec)
         }
         val width = resolveSize(desiredWidth, widthMeasureSpec)
-        // Demo font zoom policy: a CSS px in a font size maps to one Android sp.
+        // Font zoom policy: a CSS px in a font size maps to one Android sp.
         val fontPixelScale = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 1f, resources.displayMetrics)
         if (layoutDirty || layoutWidth != width || layoutFontScale != fontPixelScale) {
             if (layoutDirty || layoutFontScale != fontPixelScale) {
@@ -122,7 +122,7 @@ class HtmlPageView(context: Context) : View(context) {
             layoutWidth = width
             layoutFontScale = fontPixelScale
             layoutDirty = false
-            // Basic read-aloud access for the demo. Per-node semantics/selection come later.
+            // Basic read-aloud access. Per-node semantics and selection come later.
             contentDescription = buildString {
                 var previousBaseline: Float? = null
                 for (command in page.commands) {

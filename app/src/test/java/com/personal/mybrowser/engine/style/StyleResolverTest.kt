@@ -82,5 +82,37 @@ class StyleResolverTest {
         assertEquals(TextStyle(20f, color = TextColor.Argb(0xFFAABBCC.toInt())), paragraph.style.text)
     }
 
+    @Test fun embeddedClassAndTagRulesApplyFromAHiddenHead() {
+        val body = resolve("<head><style>p {font-size:20px} .notice {color:#1565c0}</style></head>" +
+            "<body><p class='other notice'>Hello <b>world</b></p></body>").children[1]
+        val paragraph = body.children.single()
+        assertEquals(20f, paragraph.style.text.fontSizePx, 0.001f)
+        assertEquals(TextColor.Argb(0xFF1565C0.toInt()), paragraph.style.text.color)
+        assertEquals(paragraph.style.text.color, paragraph.children.last().children.single().style.text.color)
+    }
+
+    @Test fun specificityBeatsSourceOrderAndInlineStyleBeatsBoth() {
+        val body = resolve("<style>.notice {color:#123} p {color:#456} p.notice {font-size:21px}</style>" +
+            "<p class='notice'>class</p><p class='notice' style='color:#789;font-size:18px'>inline</p>")
+        assertEquals(TextColor.Argb(0xFF112233.toInt()), body.children[1].style.text.color)
+        assertEquals(21f, body.children[1].style.text.fontSizePx, 0.001f)
+        assertEquals(TextColor.Argb(0xFF778899.toInt()), body.children[2].style.text.color)
+        assertEquals(18f, body.children[2].style.text.fontSizePx, 0.001f)
+    }
+
+    @Test fun laterEqualSpecificityRuleWinsAcrossStyleElements() {
+        val document = resolve("<style>.note {color:#123;font-size:19px}</style>" +
+            "<p class='note'>first</p><style>.note {color:#456}</style>")
+        val paragraph = document.children[1]
+        assertEquals(TextColor.Argb(0xFF445566.toInt()), paragraph.style.text.color)
+        assertEquals(19f, paragraph.style.text.fontSizePx, 0.001f)
+    }
+
+    @Test fun unsupportedRulesDoNotLeakIntoSupportedRules() {
+        val document = resolve("<style>@media screen {p {color:#f00}} " +
+            "p:hover {color:#f00} /* { ignored } */ p {color:#0a0}</style><p>green</p>")
+        assertEquals(TextColor.Argb(0xFF00AA00.toInt()), document.children.last().style.text.color)
+    }
+
     private fun resolve(html: String) = StyleResolver().resolve(HtmlParser().parse(html))
 }

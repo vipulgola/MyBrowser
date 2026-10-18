@@ -36,13 +36,13 @@ reports the computed content height during onMeasure, and the ScrollView handles
 scroll gestures. onDraw only paints the display list; parsing and layout do not
 run on every redraw. Material theme colors supply the text and page background.
 
-There is a single content description for basic read-aloud access to the demo.
+There is a single content description for basic read-aloud access.
 Per-element accessibility, text selection and full CSS are future work. Milestone
 16 added bounded image boxes and same-origin image loading. Text is measured/painted per run with simple whitespace wrapping;
 full bidirectional layout, cross-run shaping and Unicode line breaking are not
-implemented. Use the controlled local fixture for this milestone.
+implemented. Use controlled test fixtures when inspecting this renderer.
 
-## Milestone 3: Links and local navigation
+## Milestone 3: Links and navigation
 
 Anchor destinations are inherited through inline children and retained separately
 from font style. Runs with different destinations must never merge, even if their
@@ -58,24 +58,20 @@ coordinates, so adding ScrollView.scrollY would apply the offset twice. TalkBack
 custom actions provide another way to open the page's distinct destinations;
 full virtual-node accessibility is still future work.
 
-Navigation lives in the browser package. LocalNavigator accepts only exact names
-from DemoPages, creates a new immutable history on a visit, and pops one visit on
-Back. Relative URL resolution, fragments, networking and external app dispatch
-are deliberately not implemented. An unknown destination leaves history unchanged.
-BrowserViewModel retains history across rotation without disk/saved-state storage.
-The Compose BackHandler is enabled only when a previous visit exists.
-Each visit, including Back and rotation, starts at the top of the page; scroll
+Navigation for the experimental engine lives in the browser package. Link targets
+are resolved against the current HTTPS page, validated by `HttpsAddress`, and
+stored in `BrowserViewModel`'s in-memory visit history. Back restores the prior
+visit or Home; rotation retains the session through the ViewModel. Scroll
 restoration is not implemented yet. A new process starts a new session.
 
-Run the tests/build, then tap the top link, go Back, scroll to the bottom link,
-and tap it. Also drag starting on link text to confirm scrolling does not open
-the destination. Check that rotation on the About page keeps the current visit.
+Run the tests/build, open a simple HTTPS page in Experimental engine, and tap a
+same-site link. Check Back, drag-to-scroll without opening a link, and rotation.
 
 ## Verify and inspect
 
 Run `./gradlew :app:testDebugUnitTest :app:assembleDebug`.
-Launch the app, check headings and bold text, scroll to "End of the page", and
-rotate the emulator to see the same tree reflow at a new width.
+Launch the app, open a simple HTTPS page in Experimental engine, and rotate the
+emulator to see the document reflow at a new width.
 
 For the engine, set a breakpoint in `flushWord` and inspect `word`, `lineWidth`
 and `availableWidth`. Then inspect `baseline` in `flushLine`. Finally break in

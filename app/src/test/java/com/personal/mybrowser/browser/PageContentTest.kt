@@ -13,24 +13,13 @@ class PageContentTest {
     }
 
     @Test fun bothComplexityFixturesBecomeAnErrorInsteadOfAPartialDocument() {
-        for (path in listOf(DemoPages.TOO_DEEP, DemoPages.TOO_MANY_NODES)) {
-            assertEquals(PageContent.TooComplex, PageContent.parse(DemoPages.pages.getValue(path)))
-        }
-    }
-
-    @Test fun backFromARejectedLocalPageRestoresThePreviousPage() {
-        val browser = BrowserViewModel()
-        for (path in listOf(DemoPages.TOO_DEEP, DemoPages.TOO_MANY_NODES)) {
-            assertTrue(browser.open(path))
-            assertEquals(PageContent.TooComplex, PageContent.parse(browser.navigator.currentHtml))
-            browser.back()
-            assertEquals(DemoPages.HOME, browser.navigator.currentPath)
-            assertTrue(PageContent.parse(browser.navigator.currentHtml) is PageContent.Ready)
+        for (html in listOf(TestHtmlFixtures.tooDeep, TestHtmlFixtures.tooManyNodes)) {
+            assertEquals(PageContent.TooComplex, PageContent.parse(html))
         }
     }
 
     @Test fun validPageCanBeParsedAfterRejection() {
-        PageContent.parse(DemoPages.pages.getValue(DemoPages.TOO_DEEP))
-        assertTrue(PageContent.parse(DemoPages.pages.getValue(DemoPages.ABOUT)) is PageContent.Ready)
+        PageContent.parse(TestHtmlFixtures.tooDeep)
+        assertTrue(PageContent.parse("<p>Okay</p>") is PageContent.Ready)
     }
 }

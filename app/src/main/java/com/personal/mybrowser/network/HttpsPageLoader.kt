@@ -21,7 +21,7 @@ class PageLoadException(message: String) : IOException(message)
 
 /** Fetches a validated HTTPS address and returns source text, not a rendered page. */
 class HttpsPageLoader internal constructor(
-    private val connect: (URL) -> HttpsURLConnection = { it.openConnection() as HttpsURLConnection },
+    private val connect: (URL) -> HttpsURLConnection = PrivacyRelay::openHttps,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : PageLoader {
     override suspend fun load(address: HttpsAddress): LoadedHtml = withContext(ioDispatcher) {
@@ -65,10 +65,10 @@ class HttpsPageLoader internal constructor(
                 }
                 val encoding = connection.contentEncoding
                 if (!encoding.isNullOrBlank() && !encoding.equals("identity", ignoreCase = true)) {
-                    throw PageLoadException("This demo cannot read the response's compression format.")
+                    throw PageLoadException("The experimental engine cannot read this response's compression format.")
                 }
                 if (connection.contentLengthLong > MAX_BODY_BYTES) {
-                    throw PageLoadException("The page exceeds this demo's 128 KiB limit.")
+                    throw PageLoadException("The page exceeds the experimental engine's 128 KiB limit.")
                 }
                 val charset = responseCharset(contentType)
                 val bytes = ByteArrayOutputStream()
@@ -79,7 +79,7 @@ class HttpsPageLoader internal constructor(
                         val count = input.read(buffer)
                         if (count == -1) break
                         if (bytes.size() + count > MAX_BODY_BYTES) {
-                            throw PageLoadException("The page exceeds this demo's 128 KiB limit.")
+                            throw PageLoadException("The page exceeds the experimental engine's 128 KiB limit.")
                         }
                         bytes.write(buffer, 0, count)
                     }

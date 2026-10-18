@@ -21,7 +21,7 @@ object ImagePolicy {
 }
 
 class HttpsImageLoader internal constructor(
-    private val connect: (URL) -> HttpsURLConnection = { it.openConnection() as HttpsURLConnection },
+    private val connect: (URL) -> HttpsURLConnection = PrivacyRelay::openHttps,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) {
     suspend fun load(page: HttpsAddress, source: String): ByteArray? = withContext(ioDispatcher) {

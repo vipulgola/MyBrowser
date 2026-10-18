@@ -79,7 +79,7 @@ class NavigationControlsTest {
         browser.retry(); advanceUntilIdle()
         assertEquals("version 3", ready(browser).html)
         browser.back()
-        assertEquals(WebPageState.Local, browser.webPage)
+        assertEquals(WebPageState.Home, browser.webPage)
     }
 
     @Test fun redirectDuringReloadUpdatesOnlyTheCurrentEntry() = runTest {
@@ -117,36 +117,28 @@ class NavigationControlsTest {
         assertEquals(3, calls)
     }
 
-    @Test fun stopOnInitialRequestReturnsToLocalAndCancelsWork() = runTest {
+    @Test fun stopOnInitialRequestReturnsHomeAndCancelsWork() = runTest {
         val pending = CompletableDeferred<LoadedHtml>()
         var cancelled = false
         val browser = browser(PageLoader { try { pending.await() } finally { cancelled = true } })
-        browser.open(DemoPages.ABOUT)
         go(browser, "a"); runCurrent()
         browser.stop(); advanceUntilIdle()
         assertTrue(cancelled)
-        assertEquals(WebPageState.Local, browser.webPage)
-        assertEquals(DemoPages.ABOUT, browser.navigator.currentPath)
+        assertEquals(WebPageState.Home, browser.webPage)
+        assertEquals("", browser.addressInput)
     }
 
-    @Test fun localControlsPreserveVisitsAndDiscardForwardBranchOnNewNavigation() {
-        val browser = browser(PageLoader { throw AssertionError("Local controls must not fetch") })
+    @Test fun homeControlsDoNotStartRequests() {
+        val browser = browser(PageLoader { throw AssertionError("Home controls must not fetch") })
         assertFalse(browser.canGoBack)
         assertFalse(browser.canGoForward)
-        browser.open(DemoPages.ABOUT)
         browser.back()
-        assertTrue(browser.canGoForward)
         browser.reload()
-        assertTrue(browser.canGoForward)
         browser.forward()
-        assertEquals(DemoPages.ABOUT, browser.navigator.currentPath)
-        browser.reload()
-        browser.back()
-        assertEquals(DemoPages.HOME, browser.navigator.currentPath)
-        browser.open(DemoPages.TOO_DEEP)
+        browser.stop()
+        assertEquals(WebPageState.Home, browser.webPage)
+        assertFalse(browser.canGoBack)
         assertFalse(browser.canGoForward)
-        browser.stop() // Idle Stop is a no-op.
-        assertEquals(DemoPages.TOO_DEEP, browser.navigator.currentPath)
     }
 
     @Test fun newGoAfterAFailedReloadCreatesANewVisit() = runTest {

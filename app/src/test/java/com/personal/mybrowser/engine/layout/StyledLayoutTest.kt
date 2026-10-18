@@ -20,6 +20,13 @@ class StyledLayoutTest {
         assertTrue(large.contentHeight > small.contentHeight)
     }
 
+    @Test fun embeddedStyleChangesRenderedTextAndWrapping() {
+        val page = layout("<style>.large {font-size:20px;color:#1565c0}</style>" +
+            "<p class='large'>one two</p>", 80f)
+        assertEquals(2, page.commands.map { it.baselineY }.distinct().size)
+        assertTrue(page.commands.all { it.style.color == TextColor.Argb(0xFF1565C0.toInt()) })
+    }
+
     @Test fun mixedFontSizesShareABaselineAndReserveRoomForTheTallestText() {
         val page = layout("a<span style='font-size:20px'>b</span>c<br>d")
         assertEquals(16f, page.commands[0].baselineY, 0.001f)

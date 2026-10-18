@@ -68,9 +68,9 @@ names are not decoded. The parser receives the decoded values directly.
 - Basic script/style literal text and title/textarea reference-decoding modes are
   described below. Full HTML tokenizer conformance is not implemented.
 
-Device checkpoint: open Local demo and find "HTML entities". Expect Tom & Jerry,
-5 < 10, A = A and an emoji. The literal <b>Hello</b> should be visible as ordinary
-text. "An encoded link to About" uses about&#46;html and should open About.
+Verify these cases with `HtmlEntityDecoderTest` and `HtmlTokenizerTest`. An encoded
+`<b>` remains literal text, while an encoded ampersand in an `href` is decoded
+before link resolution.
 
 Numeric recovery reference: [WHATWG numeric character reference end state](https://html.spec.whatwg.org/multipage/parsing.html#numeric-character-reference-end-state).
 
@@ -100,9 +100,8 @@ scoped tokenizer mode, not JavaScript or CSS parsing.
   removal, and additional raw-text elements are not implemented. Existing simplified
   tag/attribute recovery and tree-building limitations still apply.
 
-Device checkpoint: in Local demo, find "Text inside special elements". Expect
-"Visible after script and style." and "Tom & Jerry: <b>literal text</b>". Hidden
-script/style/title strings must not appear, and the rest of the demo should render.
+Verify text-element handling with `HtmlTokenizerTest` and `TextElementTest`.
+Script, style and title content stays hidden, while textarea content is literal text.
 
 Reference: [WHATWG tokenizer states](https://html.spec.whatwg.org/multipage/parsing.html#tokenization).
 
@@ -125,9 +124,9 @@ failure starts fresh. Positive constructor overrides support focused tests.
   TooComplex result. The UI shows "This page is too complex for this browser yet."
   and a Go back button. It never passes that rejected document to HtmlPageView,
   StyleResolver or HtmlLayoutEngine. Other unexpected exceptions are not masked.
-- Local and downloaded pages use the same rendering boundary. HTTP success still
-  records the URL/HTML visit; a rendering rejection displays an error for that
-  visit. Back restores the prior visit (or local demo for the first online visit).
+- Pages opened in the experimental engine use this rendering boundary. HTTP success
+  still records the URL/HTML visit; a rendering rejection displays an error for that
+  visit. Back restores the prior visit (or Home for the first online visit).
   The address field remains available to navigate elsewhere.
 - These limits bound DOM structure, not total heap or CPU usage. The tokenizer
   still materializes tokens before tree construction; network HTML retains its
@@ -135,9 +134,9 @@ failure starts fresh. Positive constructor overrides support focused tests.
   parse-time deadlines and a complete hostile-content isolation model remain
   future work. The engine is not a full security boundary.
 
-Device checkpoint: open Local demo, scroll to "Complexity checks", and open each
-of the two links. Each should show the readable error; Go back or Android Back
-should restore the local page. Normal pages should still render.
+Verify the limits with `HtmlParserLimitsTest` and the browser's
+`PageContentTest`. A rejected page shows the readable error in the experimental
+engine; Go back or Android Back returns to the prior visit or Home.
 
 ## Verification
 

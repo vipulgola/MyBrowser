@@ -53,7 +53,7 @@ class BrowserHistoryTest {
         }
         assertEquals(3, requested.size)
         browser.back()
-        assertEquals(WebPageState.Local, browser.webPage)
+        assertEquals(WebPageState.Home, browser.webPage)
     }
 
     @Test fun visitsToTheSameUrlRestoreDifferentHtmlVersions() = runTest {
@@ -66,7 +66,7 @@ class BrowserHistoryTest {
         assertEquals("version 1", (browser.webPage as WebPageState.Ready).page.html)
         assertEquals(3, calls)
         browser.back()
-        assertEquals(WebPageState.Local, browser.webPage)
+        assertEquals(WebPageState.Home, browser.webPage)
     }
 
     @Test fun backDuringLoadingRestoresCurrentVisitAndIgnoresLateSuccess() = runTest {
@@ -132,7 +132,7 @@ class BrowserHistoryTest {
         browser.back()
         assertCurrent(browser, "a")
         browser.back()
-        assertEquals(WebPageState.Local, browser.webPage)
+        assertEquals(WebPageState.Home, browser.webPage)
     }
 
     @Test fun retryAddsExactlyOneVisitWhenItSucceeds() = runTest {
@@ -151,7 +151,7 @@ class BrowserHistoryTest {
         browser.back()
         assertCurrent(browser, "a")
         browser.back()
-        assertEquals(WebPageState.Local, browser.webPage)
+        assertEquals(WebPageState.Home, browser.webPage)
     }
 
     @Test fun newNavigationAfterBackBranchesFromTheRestoredPage() = runTest {
@@ -172,7 +172,7 @@ class BrowserHistoryTest {
         browser.back()
         assertCurrent(browser, "a")
         browser.back()
-        assertEquals(WebPageState.Local, browser.webPage)
+        assertEquals(WebPageState.Home, browser.webPage)
         assertEquals(4, requested.size)
     }
 
@@ -190,19 +190,17 @@ class BrowserHistoryTest {
         assertEquals(2, calls)
     }
 
-    @Test fun leavingNetworkModeClearsSnapshotsButPreservesLocalVisits() = runTest {
+    @Test fun goingHomeClearsThePreviousBrowsingSession() = runTest {
         val browser = browser(PageLoader { address -> LoadedHtml(address.value, "page") })
-        browser.open(DemoPages.ABOUT)
         for (path in listOf("a", "b")) { submit(browser, path); advanceUntilIdle() }
-        browser.showLocalDemo()
-        assertEquals(DemoPages.ABOUT, browser.navigator.currentPath)
+        browser.showHome()
+        assertEquals(WebPageState.Home, browser.webPage)
+        assertEquals("", browser.addressInput)
         submit(browser, "c")
         advanceUntilIdle()
         browser.back()
-        assertEquals(WebPageState.Local, browser.webPage) // A/B cannot leak into the new session.
-        assertEquals(DemoPages.ABOUT, browser.navigator.currentPath)
-        browser.back()
-        assertEquals(DemoPages.HOME, browser.navigator.currentPath)
+        assertEquals(WebPageState.Home, browser.webPage) // A/B cannot leak into the new session.
+        assertFalse(browser.canGoForward)
     }
 
     @Test fun backAfterTheFirstVisitEndsTheOnlineSession() = runTest {
@@ -210,11 +208,11 @@ class BrowserHistoryTest {
         submit(browser, "a")
         advanceUntilIdle()
         browser.back()
-        assertEquals(WebPageState.Local, browser.webPage)
+        assertEquals(WebPageState.Home, browser.webPage)
         submit(browser, "b")
         advanceUntilIdle()
         browser.back()
-        assertEquals(WebPageState.Local, browser.webPage)
+        assertEquals(WebPageState.Home, browser.webPage)
     }
 
     @Test fun oldestVisitIsUnavailableAfterTheTwentyVisitLimit() = runTest {
@@ -226,18 +224,16 @@ class BrowserHistoryTest {
             assertCurrent(browser, "$number")
         }
         browser.back()
-        assertEquals(WebPageState.Local, browser.webPage)
+        assertEquals(WebPageState.Home, browser.webPage)
         assertEquals(21, calls)
     }
 
-    @Test fun failedInitialRequestReturnsToTheLocalVisit() = runTest {
+    @Test fun failedInitialRequestReturnsHome() = runTest {
         val browser = browser(PageLoader { throw IOException("offline") })
-        browser.open(DemoPages.ABOUT)
         submit(browser, "a")
         advanceUntilIdle()
         browser.back()
-        assertEquals(WebPageState.Local, browser.webPage)
-        assertEquals(DemoPages.ABOUT, browser.navigator.currentPath)
+        assertEquals(WebPageState.Home, browser.webPage)
     }
 
     @Test fun redirectedResultUsesFinalUrlForLinksAndOneHistoryEntry() = runTest {
@@ -279,7 +275,7 @@ class BrowserHistoryTest {
         var calls = 0
         val browser = browser(PageLoader { address ->
             calls++
-            val html = if (address.value.endsWith("/complex")) DemoPages.pages.getValue(DemoPages.TOO_DEEP) else "<p>Good page</p>"
+            val html = if (address.value.endsWith("/complex")) TestHtmlFixtures.tooDeep else "<p>Good page</p>"
             LoadedHtml(address.value, html)
         })
         submit(browser, "a")
@@ -293,14 +289,14 @@ class BrowserHistoryTest {
         assertEquals(2, calls)
     }
 
-    @Test fun backFromAnInitialComplexOnlinePageReturnsToLocalDemo() = runTest {
-        val browser = browser(PageLoader { address -> LoadedHtml(address.value, DemoPages.pages.getValue(DemoPages.TOO_MANY_NODES)) })
+    @Test fun backFromAnInitialComplexOnlinePageReturnsHome() = runTest {
+        val browser = browser(PageLoader { address -> LoadedHtml(address.value, TestHtmlFixtures.tooManyNodes) })
         submit(browser, "complex")
         advanceUntilIdle()
         assertEquals(PageContent.TooComplex, PageContent.parse((browser.webPage as WebPageState.Ready).page.html))
         browser.back()
-        assertEquals(WebPageState.Local, browser.webPage)
-        assertTrue(PageContent.parse(browser.navigator.currentHtml) is PageContent.Ready)
+        assertEquals(WebPageState.Home, browser.webPage)
+        assertEquals("", browser.addressInput)
     }
 
     private fun browser(loader: PageLoader) = BrowserViewModel(loader).also { store.put("browser", it) }

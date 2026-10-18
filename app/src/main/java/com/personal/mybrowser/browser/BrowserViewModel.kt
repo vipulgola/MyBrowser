@@ -16,17 +16,15 @@ import javax.net.ssl.SSLException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 
 /** Retains the current visit/history across rotation, with no disk or saved-state storage. */
 class BrowserViewModel(private val loader: PageLoader = HttpsPageLoader()) : ViewModel() {
-    var navigator by mutableStateOf(LocalNavigator(DemoPages.pages, DemoPages.HOME))
+    var webPage by mutableStateOf<WebPageState>(WebPageState.Home)
         private set
 
-    var webPage by mutableStateOf<WebPageState>(WebPageState.Local)
-        private set
-
-    var addressInput by mutableStateOf("example.com")
+    var addressInput by mutableStateOf("")
         private set
     var addressError by mutableStateOf<String?>(null)
         private set
@@ -38,26 +36,55 @@ class BrowserViewModel(private val loader: PageLoader = HttpsPageLoader()) : Vie
     private var onlineHistory by mutableStateOf(OnlineHistory())
     private var requestId = 0L
     private var request: Job? = null
+    private val stoppingRequests = mutableListOf<Job>()
+    private var lastIncomingUrl: String? = null
+    var ownEngineSelected by mutableStateOf(false)
+    var compatibleCurrentUrl by mutableStateOf<String?>(null)
+    var embeddedCurrentUrl by mutableStateOf<String?>(null)
+        private set
 
-    val canGoBack: Boolean get() = webPage != WebPageState.Local || navigator.canGoBack
+    /** Keep the engine session while YouTube plays in an embedded WebView panel. */
+    fun openEmbeddedYouTube(url: String) {
+        require(YouTubeRouting.isYouTubeUrl(url)) { "Expected a validated YouTube HTTPS URL." }
+        stop()
+        // A completed redirect may already have committed YouTube to engine history.
+        // Restore the previous engine page so returning from the panel cannot loop.
+        if ((webPage as? WebPageState.Ready)?.page?.url == url) back()
+        embeddedCurrentUrl = url
+    }
+
+    fun updateEmbeddedUrl(url: String?) {
+        if (url == null) closeEmbeddedYouTube()
+        else if (CompatibleNavigation.isAllowedNavigation(url)) embeddedCurrentUrl = url
+    }
+
+    fun closeEmbeddedYouTube() {
+        embeddedCurrentUrl = null
+    }
+
+    /** A fresh intent is a new visit; recreation of the same Activity is not. */
+    fun acceptIncomingUrl(url: String, isNewIntent: Boolean): Boolean {
+        if (!isNewIntent && lastIncomingUrl == url) return false
+        lastIncomingUrl = url
+        return true
+    }
+
+    val canGoBack: Boolean get() = webPage != WebPageState.Home
     val canGoForward: Boolean get() = when (webPage) {
-        WebPageState.Local -> navigator.canGoForward
+        WebPageState.Home -> false
         is WebPageState.Ready -> onlineHistory.canGoForward
         else -> false
     }
 
     fun forward() {
         if (!canGoForward) return
-        if (webPage == WebPageState.Local) navigator = navigator.forward()
-        else {
-            onlineHistory = onlineHistory.forward()
-            restoreCurrentVisit()
-        }
+        onlineHistory = onlineHistory.forward()
+        restoreCurrentVisit()
     }
 
     fun reload() {
         when (val state = webPage) {
-            WebPageState.Local -> navigator = navigator.reload()
+            WebPageState.Home -> Unit
             is WebPageState.Ready -> {
                 val address = HttpsAddress.parseInput(state.page.url)
                 addressInput = address.value
@@ -89,21 +116,14 @@ class BrowserViewModel(private val loader: PageLoader = HttpsPageLoader()) : Vie
             load(address)
             return true
         }
-        if (webPage != WebPageState.Local) return false
-        val next = navigator.navigate(target)
-        if (next === navigator) return false
-        navigator = next
-        return true
+        return false
     }
 
     fun back() {
-        if (webPage == WebPageState.Local) {
-            navigator = navigator.back()
-            return
-        }
+        if (webPage == WebPageState.Home) return
         if (webPage is WebPageState.Ready) {
             if (!onlineHistory.canGoBack) {
-                showLocalDemo()
+                showHome()
                 return
             }
             onlineHistory = onlineHistory.back()
@@ -115,7 +135,7 @@ class BrowserViewModel(private val loader: PageLoader = HttpsPageLoader()) : Vie
     private fun restoreCurrentVisit() {
         val page = onlineHistory.currentPage
         if (page == null) {
-            showLocalDemo()
+            showHome()
             return
         }
         cancelRequest()
@@ -152,7 +172,7 @@ class BrowserViewModel(private val loader: PageLoader = HttpsPageLoader()) : Vie
 
     private fun load(address: HttpsAddress, replaceCurrent: Boolean = false) {
         if ((webPage as? WebPageState.Loading)?.address == address) return
-        request?.cancel()
+        cancelActiveRequest()
         val id = ++requestId
         webPage = WebPageState.Loading(address)
         request = viewModelScope.launch {
@@ -181,17 +201,40 @@ class BrowserViewModel(private val loader: PageLoader = HttpsPageLoader()) : Vie
         }
     }
 
-    fun showLocalDemo() {
+    fun showHome() {
         cancelRequest()
-        onlineHistory = OnlineHistory() // Leaving network mode releases this session's snapshots.
-        webPage = WebPageState.Local
+        onlineHistory = OnlineHistory() // Release this session's HTML snapshots.
+        webPage = WebPageState.Home
+        addressInput = ""
         addressError = null
         linkError = null
     }
 
+    /** Wait for any blocking engine fetch to finish canceling before changing network routes. */
+    suspend fun stopAndAwait() {
+        cancelRequest()
+        while (true) {
+            val pending = stoppingRequests.filterNot(Job::isCompleted)
+            if (pending.isEmpty()) {
+                stoppingRequests.clear()
+                return
+            }
+            pending.joinAll()
+            stoppingRequests.removeAll(Job::isCompleted)
+        }
+    }
+
     private fun cancelRequest() {
         requestId++
-        request?.cancel()
+        cancelActiveRequest()
+    }
+
+    private fun cancelActiveRequest() {
+        request?.let { active ->
+            active.cancel()
+            stoppingRequests.removeAll(Job::isCompleted)
+            stoppingRequests.add(active)
+        }
         request = null
     }
 

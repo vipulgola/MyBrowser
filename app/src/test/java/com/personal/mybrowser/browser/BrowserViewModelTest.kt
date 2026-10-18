@@ -34,9 +34,16 @@ class BrowserViewModelTest {
     @Before fun prepareMain() { Dispatchers.setMain(dispatcher) }
     @After fun cleanUp() { store.clear(); Dispatchers.resetMain() }
 
+    @Test fun newBrowserStartsAtAnEmptyHome() {
+        val browser = BrowserViewModel()
+        assertEquals(WebPageState.Home, browser.webPage)
+        assertEquals("", browser.addressInput)
+        assertFalse(browser.canGoBack)
+    }
+
     @Test fun loadingTransitionsToReady() = runTest {
         val browser = browser(PageLoader { example })
-        assertEquals(WebPageState.Local, browser.webPage)
+        assertEquals(WebPageState.Home, browser.webPage)
         browser.submitAddress()
         assertTrue(browser.webPage is WebPageState.Loading)
         advanceUntilIdle()
@@ -56,20 +63,18 @@ class BrowserViewModelTest {
         assertEquals(2, attempts)
     }
 
-    @Test fun backCancelsLoadingAndKeepsLocalHistory() = runTest {
+    @Test fun backCancelsInitialLoadingAndReturnsHome() = runTest {
         val response = CompletableDeferred<LoadedHtml>()
         var cancelled = false
         val browser = browser(PageLoader { try { response.await() } finally { cancelled = true } })
-        browser.open(DemoPages.ABOUT)
         browser.submitAddress()
         runCurrent()
         browser.back()
         advanceUntilIdle()
         assertTrue(cancelled)
-        assertEquals(WebPageState.Local, browser.webPage)
-        assertEquals(DemoPages.ABOUT, browser.navigator.currentPath)
-        browser.back()
-        assertEquals(DemoPages.HOME, browser.navigator.currentPath)
+        assertEquals(WebPageState.Home, browser.webPage)
+        assertEquals("", browser.addressInput)
+        assertFalse(browser.canGoBack)
     }
 
     @Test fun aLateOldRequestCannotReplaceANewerResult() = runTest {
@@ -81,7 +86,8 @@ class BrowserViewModelTest {
         })
         browser.submitAddress()
         runCurrent()
-        browser.showLocalDemo()
+        browser.showHome()
+        browser.editAddress("example.com")
         browser.submitAddress()
         runCurrent()
         oldResponse.complete(example.copy(html = "old result"))
@@ -102,7 +108,7 @@ class BrowserViewModelTest {
         advanceUntilIdle()
     }
 
-    @Test fun onlineLinksResolveAgainstTheDisplayedPageAndKeepLocalHistorySeparate() = runTest {
+    @Test fun onlineLinksResolveAgainstTheDisplayedPage() = runTest {
         val requested = mutableListOf<String>()
         val browser = browser(PageLoader { address ->
             requested += address.value
@@ -112,16 +118,15 @@ class BrowserViewModelTest {
         browser.submitAddress()
         advanceUntilIdle()
         browser.editAddress("other.com/unsubmitted")
-        assertTrue(browser.open(DemoPages.ABOUT))
+        assertTrue(browser.open("about.html"))
         assertEquals("https://example.com/docs/about.html", browser.addressInput)
         advanceUntilIdle()
         assertEquals(listOf("https://example.com/docs/start", "https://example.com/docs/about.html"), requested)
-        assertEquals(DemoPages.HOME, browser.navigator.currentPath)
         browser.back()
         assertEquals("https://example.com/docs/start", (browser.webPage as WebPageState.Ready).page.url)
         assertEquals(2, requested.size)
         browser.back()
-        assertEquals(WebPageState.Local, browser.webPage)
+        assertEquals(WebPageState.Home, browser.webPage)
     }
 
     @Test fun invalidLinksLeavePageAndDraftUntouchedAndNeverFetch() = runTest {
@@ -344,5 +349,40 @@ class BrowserViewModelTest {
         assertEquals(2, requested.size)
     }
 
-    private fun browser(loader: PageLoader) = BrowserViewModel(loader).also { store.put("browser", it) }
+    @Test fun embeddedYouTubeKeepsTheEnginePageForReturn() = runTest {
+        val browser = browser(PageLoader { example })
+        browser.submitAddress()
+        advanceUntilIdle()
+        browser.ownEngineSelected = true
+
+        browser.openEmbeddedYouTube("https://youtube.com/watch?v=abc")
+        assertTrue(browser.ownEngineSelected)
+        assertEquals("https://youtube.com/watch?v=abc", browser.embeddedCurrentUrl)
+        assertEquals(WebPageState.Ready(example), browser.webPage)
+
+        browser.updateEmbeddedUrl("https://m.youtube.com/watch?v=abc")
+        assertEquals("https://m.youtube.com/watch?v=abc", browser.embeddedCurrentUrl)
+        browser.closeEmbeddedYouTube()
+        assertEquals(null, browser.embeddedCurrentUrl)
+        assertEquals(WebPageState.Ready(example), browser.webPage)
+    }
+
+    @Test fun aCompletedYouTubeRedirectDoesNotReopenThePanelAfterReturn() = runTest {
+        val youtube = LoadedHtml("https://www.youtube.com/watch?v=abc", "<p>redirected</p>")
+        val browser = browser(PageLoader { youtube })
+        browser.submitAddress()
+        advanceUntilIdle()
+        assertEquals(WebPageState.Ready(youtube), browser.webPage)
+
+        browser.openEmbeddedYouTube(youtube.url)
+        assertEquals(youtube.url, browser.embeddedCurrentUrl)
+        assertEquals(WebPageState.Home, browser.webPage)
+        browser.closeEmbeddedYouTube()
+        assertEquals(WebPageState.Home, browser.webPage)
+    }
+
+    private fun browser(loader: PageLoader) = BrowserViewModel(loader).also {
+        store.put("browser", it)
+        it.editAddress("example.com")
+    }
 }
