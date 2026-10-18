@@ -50,6 +50,8 @@ fun NormalBrowserTabs(
     torEnabled: Boolean,
     darkPagesEnabled: Boolean,
     onOpenSettings: () -> Unit,
+    onOpenHistory: () -> Unit,
+    onPageVisit: (url: String, title: String?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val tabsState = remember { BrowserTabsState() }
@@ -150,6 +152,8 @@ fun NormalBrowserTabs(
                             if (tabsState.selectedId == tab.id) openNewTab(url)
                         },
                         onOpenSettings = { if (tabsState.selectedId == tab.id) onOpenSettings() },
+                        onOpenHistory = { if (tabsState.selectedId == tab.id) onOpenHistory() },
+                        onPageVisit = onPageVisit,
                         isActive = selected,
                         modifier = if (selected) Modifier.fillMaxSize() else Modifier.size(0.dp),
                     )

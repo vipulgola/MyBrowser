@@ -81,6 +81,8 @@ fun CompatibleBrowser(
     darkPagesEnabled: Boolean = false,
     onOpenNewTab: ((String) -> Unit)? = null,
     onOpenSettings: (() -> Unit)? = null,
+    onOpenHistory: (() -> Unit)? = null,
+    onPageVisit: ((url: String, title: String?) -> Unit)? = null,
     addressBarRevealToken: Long = 0L,
     homeRequestToken: Long = 0L,
     overflowMenuRequestToken: Long = 0L,
@@ -308,6 +310,13 @@ fun CompatibleBrowser(
                             menuExpanded = false
                             showSiteDetails = true
                         })
+                        if (onOpenHistory != null) DropdownMenuItem(
+                            text = { Text("History") },
+                            onClick = {
+                                menuExpanded = false
+                                onOpenHistory()
+                            },
+                        )
                         if (onOpenSettings != null) DropdownMenuItem(
                             text = { Text("Settings") },
                             onClick = {
@@ -394,6 +403,7 @@ fun CompatibleBrowser(
                 popupsAllowed = popupsAllowed,
                 torEnabled = torEnabled,
                 onOpenSettings = onOpenSettings,
+                onOpenHistory = onOpenHistory,
             )
         } else if (blockedPage != null) {
             Column(
@@ -471,6 +481,7 @@ fun CompatibleBrowser(
                                 activeUrl = url
                                 currentUrl = url
                                 onCurrentUrlChange(url)
+                                onPageVisit?.invoke(url, view.title)
                                 canBack = view.canGoBack()
                                 canForward = view.canGoForward()
                             }

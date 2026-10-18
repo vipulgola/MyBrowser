@@ -33,6 +33,7 @@ fun BrowserHome(
     adBlockingEnabled: Boolean,
     popupsAllowed: Boolean,
     torEnabled: Boolean,
+    onOpenHistory: (() -> Unit)? = null,
     onOpenSettings: (() -> Unit)?,
 ) {
     val colors = MaterialTheme.colorScheme
@@ -113,6 +114,7 @@ fun BrowserHome(
             }
             Spacer(Modifier.height(16.dp))
             DefaultBrowserOption()
+            if (onOpenHistory != null) TextButton(onClick = onOpenHistory) { Text("History") }
             if (onOpenSettings != null) TextButton(onClick = onOpenSettings) { Text("Settings") }
             TextButton(onClick = onExperimentalEngine) { Text(engineButtonLabel) }
         }

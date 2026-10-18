@@ -56,6 +56,8 @@ import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.fragment.app.FragmentActivity
 import com.personal.mybrowser.browser.BrowserAppLockSettings
+import com.personal.mybrowser.browser.BrowserHistoryDialog
+import com.personal.mybrowser.browser.BrowserHistoryRepository
 import com.personal.mybrowser.browser.BrowserPopupSettings
 import com.personal.mybrowser.browser.BrowserSettingsDialog
 import com.personal.mybrowser.browser.BrowserTorSettings
@@ -87,6 +89,7 @@ class MainActivity : FragmentActivity(), BrowserFullscreenHost {
     private var nextRouteId = 0L
     private lateinit var popupSettings: BrowserPopupSettings
     private lateinit var appLockSettings: BrowserAppLockSettings
+    private lateinit var browserHistory: BrowserHistoryRepository
     private lateinit var torSettings: BrowserTorSettings
     private var popupsAllowed by mutableStateOf(false)
     private var appLockEnabled by mutableStateOf(false)
@@ -95,6 +98,7 @@ class MainActivity : FragmentActivity(), BrowserFullscreenHost {
     private var appLockPromptVisible = false
     private var torEnabled by mutableStateOf(true)
     private var settingsVisible by mutableStateOf(false)
+    private var historyVisible by mutableStateOf(false)
     private var settingsError by mutableStateOf<String?>(null)
     private var fullscreenView: View? = null
     private var fullscreenCallback: android.webkit.WebChromeClient.CustomViewCallback? = null
@@ -109,6 +113,7 @@ class MainActivity : FragmentActivity(), BrowserFullscreenHost {
         browser = ViewModelProvider(this)[BrowserViewModel::class.java]
         popupSettings = BrowserPopupSettings(applicationContext)
         appLockSettings = BrowserAppLockSettings(applicationContext)
+        browserHistory = BrowserHistoryRepository(applicationContext)
         torSettings = BrowserTorSettings(applicationContext)
         popupsAllowed = popupSettings.isEnabled()
         appLockEnabled = appLockSettings.isEnabled()
@@ -153,6 +158,8 @@ class MainActivity : FragmentActivity(), BrowserFullscreenHost {
                             torEnabled = torEnabled,
                             darkPagesEnabled = useDarkPages,
                             onOpenSettings = ::openSettings,
+                            onOpenHistory = { historyVisible = true },
+                            onPageVisit = { url, title -> browserHistory.record(url, title) },
                             onOwnEngine = { currentUrl ->
                                 if (YouTubeRouting.isYouTubeUrl(currentUrl)) {
                                     browser.openEmbeddedYouTube(checkNotNull(currentUrl))
@@ -178,6 +185,8 @@ class MainActivity : FragmentActivity(), BrowserFullscreenHost {
                             torEnabled = torEnabled,
                             darkPagesEnabled = useDarkPages,
                             onOpenSettings = ::openSettings,
+                            onOpenHistory = { historyVisible = true },
+                            onPageVisit = { url, title -> browserHistory.record(url, title) },
                             modifier = Modifier.padding(innerPadding),
                         )
                     } else {
@@ -194,6 +203,8 @@ class MainActivity : FragmentActivity(), BrowserFullscreenHost {
                             },
                             onYouTube = browser::openEmbeddedYouTube,
                             onOpenSettings = ::openSettings,
+                            onOpenHistory = { historyVisible = true },
+                            onPageVisit = { url, title -> browserHistory.record(url, title) },
                             modifier = Modifier.padding(innerPadding),
                         )
                     }
@@ -218,6 +229,16 @@ class MainActivity : FragmentActivity(), BrowserFullscreenHost {
                     },
                     error = settingsError,
                     onDismiss = { settingsVisible = false },
+                )
+                if (historyVisible && !appLocked) BrowserHistoryDialog(
+                    entries = browserHistory.entries,
+                    onOpen = { entry ->
+                        historyVisible = false
+                        switchToCompatible(entry.url)
+                    },
+                    onRemove = { entry -> browserHistory.remove(entry.id) },
+                    onClear = browserHistory::clear,
+                    onDismiss = { historyVisible = false },
                 )
             }
         }
@@ -458,6 +479,8 @@ private fun EmbeddedYouTubePanel(
     torEnabled: Boolean,
     darkPagesEnabled: Boolean,
     onOpenSettings: () -> Unit,
+    onOpenHistory: () -> Unit,
+    onPageVisit: (url: String, title: String?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxSize()) {
@@ -481,6 +504,8 @@ private fun EmbeddedYouTubePanel(
             torEnabled = torEnabled,
             darkPagesEnabled = darkPagesEnabled,
             onOpenSettings = onOpenSettings,
+            onOpenHistory = onOpenHistory,
+            onPageVisit = onPageVisit,
             modifier = Modifier.weight(1f),
         )
     }
@@ -493,10 +518,15 @@ fun OwnEngineBrowser(
     onCompatible: () -> Unit,
     onYouTube: (String) -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenHistory: () -> Unit,
+    onPageVisit: (url: String, title: String?) -> Unit,
 ) {
     val webPage = browser.webPage
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
+    LaunchedEffect(webPage) {
+        (webPage as? WebPageState.Ready)?.let { onPageVisit(it.page.url, null) }
+    }
     val submit = {
         val youtubeUrl = YouTubeRouting.fromAddressInput(browser.addressInput)
         if (youtubeUrl != null) {
@@ -558,6 +588,7 @@ fun OwnEngineBrowser(
                 TextButton(onClick = browser::showHome) { Text("Home") }
             }
             TextButton(onClick = onCompatible) { Text("Normal browser") }
+            TextButton(onClick = onOpenHistory) { Text("History") }
             TextButton(onClick = onOpenSettings) { Text("Settings") }
             Text(
                 "Ad blocking and known-threat checking are unavailable in this experimental mode.",
